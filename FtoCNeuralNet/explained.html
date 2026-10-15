@@ -1,0 +1,665 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>How a Neuron Learns</title>
+<!--
+  explained.html - a beginner's explanation of FtoCNeuralNet.
+  Written for 8th graders with no background in neural networks.
+  Open it straight in a browser; it needs no server and no internet.
+-->
+<style>
+  :root {
+    color-scheme: light;
+    --page: #f9f9f7;
+    --surface: #ffffff;
+    --text: #1b1b1a;
+    --text-secondary: #52514e;
+    --muted: #898781;
+    --grid: #e7e6e0;
+    --axis: #c3c2b7;
+    --border: rgba(11, 11, 11, 0.10);
+    --blue: #2a78d6;       /* the neuron's guesses */
+    --orange: #eb6834;     /* the right answers */
+    --blue-wash: rgba(42, 120, 214, 0.08);
+    --orange-wash: rgba(235, 104, 52, 0.10);
+    --good: #006300;
+    --bad: #d03b3b;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      color-scheme: dark;
+      --page: #0d0d0d;
+      --surface: #1a1a19;
+      --text: #f4f4f2;
+      --text-secondary: #c3c2b7;
+      --muted: #898781;
+      --grid: #2c2c2a;
+      --axis: #383835;
+      --border: rgba(255, 255, 255, 0.10);
+      --blue: #3987e5;
+      --orange: #d95926;
+      --blue-wash: rgba(57, 135, 229, 0.12);
+      --orange-wash: rgba(217, 89, 38, 0.14);
+      --good: #0ca30c;
+      --bad: #e66767;
+    }
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --page: #0d0d0d;
+    --surface: #1a1a19;
+    --text: #f4f4f2;
+    --text-secondary: #c3c2b7;
+    --muted: #898781;
+    --grid: #2c2c2a;
+    --axis: #383835;
+    --border: rgba(255, 255, 255, 0.10);
+    --blue: #3987e5;
+    --orange: #d95926;
+    --blue-wash: rgba(57, 135, 229, 0.12);
+    --orange-wash: rgba(217, 89, 38, 0.14);
+    --good: #0ca30c;
+    --bad: #e66767;
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--page);
+    color: var(--text);
+    font: 18px/1.65 system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+  main { max-width: 860px; margin: 0 auto; padding: 48px 24px 80px; }
+  header { margin-bottom: 40px; }
+  .kicker { color: var(--blue); font-weight: 600; font-size: 15px; letter-spacing: 0.04em; text-transform: uppercase; }
+  h1 { font-size: 40px; line-height: 1.15; margin: 8px 0 16px; }
+  h2 { font-size: 27px; line-height: 1.25; margin: 56px 0 12px; }
+  h2 .num { color: var(--muted); font-weight: 500; margin-right: 8px; }
+  h3 { font-size: 19px; margin: 24px 0 6px; }
+  p { margin: 0 0 14px; }
+  .lede { font-size: 21px; color: var(--text-secondary); }
+  ul, ol { padding-left: 24px; margin: 0 0 14px; }
+  li { margin-bottom: 6px; }
+  code, .mono { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 0.9em; }
+  .blue { color: var(--blue); font-weight: 600; }
+  .orange { color: var(--orange); font-weight: 600; }
+  .num-tab { font-variant-numeric: tabular-nums; }
+
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 20px 24px;
+    margin: 20px 0;
+  }
+  .callout {
+    border-left: 4px solid var(--blue);
+    background: var(--blue-wash);
+    border-radius: 0 10px 10px 0;
+    padding: 14px 18px;
+    margin: 20px 0;
+  }
+  .callout.orange-edge { border-left-color: var(--orange); background: var(--orange-wash); }
+  .callout p:last-child { margin-bottom: 0; }
+  .equation {
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    font-size: 20px;
+    text-align: center;
+    padding: 14px;
+    margin: 14px 0;
+    background: var(--page);
+    border-radius: 10px;
+  }
+
+  svg { display: block; width: 100%; height: auto; }
+  svg text { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; }
+
+  /* Playgrounds */
+  .playground { display: grid; grid-template-columns: 1.35fr 1fr; gap: 20px; align-items: start; }
+  .chart-legend { display: flex; gap: 18px; font-size: 14px; color: var(--text-secondary); margin-bottom: 4px; flex-wrap: wrap; }
+  .chart-legend i { display: inline-block; vertical-align: middle; margin-right: 6px; }
+  .dot { width: 10px; height: 10px; border-radius: 50%; }
+  .ln { width: 18px; height: 2px; }
+  .bar { width: 2px; height: 12px; opacity: 0.6; }
+  .knob { margin-bottom: 14px; }
+  .knob label { display: flex; justify-content: space-between; font-size: 15px; color: var(--text-secondary); }
+  .knob label b { color: var(--text); font-variant-numeric: tabular-nums; }
+  .knob input { width: 100%; accent-color: var(--blue); }
+  .score {
+    border-radius: 10px; padding: 12px 14px; background: var(--page); margin-bottom: 12px;
+  }
+  .score .label { font-size: 13px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; }
+  .score .value { font-size: 30px; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .score .hint { font-size: 14px; color: var(--text-secondary); }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; font-variant-numeric: tabular-nums; }
+  th { font-weight: 500; color: var(--muted); font-size: 12px; text-align: right; padding: 3px 4px; border-bottom: 1px solid var(--grid); }
+  td { text-align: right; padding: 4px; border-bottom: 1px solid var(--grid); }
+  th:first-child, td:first-child { text-align: left; }
+  button {
+    font: inherit; font-size: 15px; cursor: pointer; border-radius: 9px; padding: 7px 14px;
+    border: 1px solid var(--axis); background: transparent; color: var(--text);
+  }
+  button:hover { background: var(--grid); }
+  button.go { background: var(--blue); border-color: var(--blue); color: #fff; font-weight: 600; }
+  button.go:hover { opacity: 0.88; }
+  .choices { display: flex; gap: 6px; flex-wrap: wrap; margin: 6px 0 12px; }
+  .choices button[aria-pressed="true"] { border-color: var(--blue); background: var(--blue-wash); font-weight: 600; }
+  .message { font-size: 15px; min-height: 48px; color: var(--text-secondary); }
+  .message.bad { color: var(--bad); font-weight: 600; }
+  .message.good { color: var(--good); font-weight: 600; }
+
+  .steps { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin: 20px 0; }
+  .step { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 14px; }
+  .step .n { width: 28px; height: 28px; border-radius: 50%; background: var(--blue); color: #fff;
+             display: grid; place-items: center; font-weight: 700; font-size: 15px; margin-bottom: 8px; }
+  .step b { display: block; margin-bottom: 4px; }
+  .step span { font-size: 15px; color: var(--text-secondary); line-height: 1.5; display: block; }
+
+  .glossary { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .glossary div { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 12px 16px; }
+  .glossary dt { font-weight: 700; }
+  .glossary dt small { font-weight: 500; color: var(--muted); }
+  .glossary dd { margin: 4px 0 0; font-size: 15px; color: var(--text-secondary); }
+
+  footer { margin-top: 64px; padding-top: 20px; border-top: 1px solid var(--grid); color: var(--muted); font-size: 15px; }
+</style>
+</head>
+<body>
+<main>
+
+<header>
+  <div class="kicker">A neural network, explained</div>
+  <h1>How a computer learns to turn Fahrenheit into Celsius without being told how</h1>
+  <p class="lede">We'll build the world's smallest "brain": one artificial neuron. We show it a few
+    examples, and it figures out the conversion on its own. By the end you'll understand the main idea
+    behind every neural network, including the giant ones behind AI chatbots.</p>
+</header>
+
+<!-- ===================================================================== -->
+<h2><span class="num">1</span>The puzzle</h2>
+<p>The US measures temperature in <b>Fahrenheit (°F)</b>. Most of the world uses <b>Celsius (°C)</b>.
+  Water freezes at 32°F, which is 0°C. It boils at 212°F, which is 100°C.</p>
+<p>There's a formula to convert between them, and you may have seen it in math class:</p>
+<div class="equation">C = (F − 32) × 5 ÷ 9</div>
+<p>Here's the challenge: <b>what if we didn't know the formula?</b> All we have is a list of
+  temperatures that someone measured both ways:</p>
+
+<div class="card" style="max-width:420px">
+  <table>
+    <thead><tr><th>Fahrenheit</th><th>Celsius</th><th style="text-align:left;padding-left:16px">What it is</th></tr></thead>
+    <tbody>
+      <tr><td>−40°F</td><td>−40°C</td><td style="text-align:left;padding-left:16px">the two scales match!</td></tr>
+      <tr><td>0°F</td><td>−17.78°C</td><td style="text-align:left;padding-left:16px">very cold day</td></tr>
+      <tr><td>32°F</td><td>0°C</td><td style="text-align:left;padding-left:16px">water freezes</td></tr>
+      <tr><td>50°F</td><td>10°C</td><td style="text-align:left;padding-left:16px">jacket weather</td></tr>
+      <tr><td>72°F</td><td>22.22°C</td><td style="text-align:left;padding-left:16px">room temperature</td></tr>
+      <tr><td>100°F</td><td>37.78°C</td><td style="text-align:left;padding-left:16px">very hot day</td></tr>
+      <tr><td>212°F</td><td>100°C</td><td style="text-align:left;padding-left:16px">water boils</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<p>Can a computer look at these 7 examples and work out the rule by itself? That's what a
+  <b>neural network</b> does: it learns from examples instead of being given the rules.
+  These examples are called the <b>training data</b>.</p>
+
+<!-- ===================================================================== -->
+<h2><span class="num">2</span>Meet the neuron: a machine with two knobs</h2>
+<p>Our neural network is just one <b>neuron</b>. Think of it as a tiny machine. A number goes in,
+  the machine does two things to it, and a number comes out:</p>
+
+<div class="card">
+  <svg viewBox="0 0 760 170" role="img" aria-label="A Fahrenheit number goes in, is multiplied, then has a number added, and Celsius comes out.">
+    <defs>
+      <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+        <path d="M0,0 L10,5 L0,10 z" fill="var(--axis)"/>
+      </marker>
+    </defs>
+    <!-- input -->
+    <rect x="10" y="50" width="120" height="60" rx="12" fill="var(--page)" stroke="var(--axis)" stroke-width="1.5"/>
+    <text x="70" y="40" text-anchor="middle" font-size="14" fill="var(--muted)">IN</text>
+    <text x="70" y="88" text-anchor="middle" font-size="22" font-weight="700" fill="var(--text)">°F</text>
+    <line x1="134" y1="80" x2="216" y2="80" stroke="var(--axis)" stroke-width="2" marker-end="url(#arrow)"/>
+    <!-- multiply -->
+    <circle cx="270" cy="80" r="48" fill="var(--blue-wash)" stroke="var(--blue)" stroke-width="2.5"/>
+    <text x="270" y="90" text-anchor="middle" font-size="30" font-weight="700" fill="var(--blue)">×</text>
+    <text x="270" y="152" text-anchor="middle" font-size="15" fill="var(--text)">multiply knob</text>
+    <line x1="322" y1="80" x2="434" y2="80" stroke="var(--axis)" stroke-width="2" marker-end="url(#arrow)"/>
+    <!-- add -->
+    <circle cx="488" cy="80" r="48" fill="var(--blue-wash)" stroke="var(--blue)" stroke-width="2.5"/>
+    <text x="488" y="90" text-anchor="middle" font-size="30" font-weight="700" fill="var(--blue)">+</text>
+    <text x="488" y="152" text-anchor="middle" font-size="15" fill="var(--text)">add knob</text>
+    <line x1="540" y1="80" x2="622" y2="80" stroke="var(--axis)" stroke-width="2" marker-end="url(#arrow)"/>
+    <!-- output -->
+    <rect x="628" y="50" width="120" height="60" rx="12" fill="var(--page)" stroke="var(--axis)" stroke-width="1.5"/>
+    <text x="688" y="40" text-anchor="middle" font-size="14" fill="var(--muted)">OUT (its guess)</text>
+    <text x="688" y="88" text-anchor="middle" font-size="22" font-weight="700" fill="var(--text)">°C</text>
+  </svg>
+</div>
+
+<div class="equation">guess = <span class="blue">multiply knob</span> × F + <span class="blue">add knob</span></div>
+
+<p>Scientists have official names for the knobs. The multiply knob is called the <b>weight</b> (written
+  <code>w</code>), and the add knob is called the <b>bias</b> (written <code>b</code>). So you'll often see:</p>
+<div class="equation">guess = w × F + b</div>
+
+<p>Here's the key idea: <b>everything the neuron "knows" is stored in those two knobs.</b> At the start,
+  both are set to 0, so the neuron knows nothing. It guesses 0°C for every temperature. Learning
+  means finding the right knob settings.</p>
+
+<!-- ===================================================================== -->
+<h2><span class="num">3</span>Your turn: be the neuron</h2>
+<p>Before the computer tries, you try. Drag the two knobs below. The <span class="orange">orange dots</span> are
+  the 7 correct answers. The <span class="blue">blue line</span> shows what the neuron would guess for
+  every temperature. Your goal is to get the line to pass through all the dots.</p>
+
+<div class="card">
+  <div id="manual" class="playground"></div>
+</div>
+
+<div class="callout">
+  <p><b>Notice:</b> the multiply knob changes how <i>steep</i> the line is (tilting it), and the add knob
+    slides the whole line <i>up or down</i>. You need both to get it right.</p>
+</div>
+
+<!-- ===================================================================== -->
+<h2><span class="num">4</span>Keeping score: how wrong is it?</h2>
+<p>To get better, the neuron needs to know how badly it's doing. So we give it a
+  <b>mistake score</b>. A big score means very wrong, and a score of 0 means perfect.
+  Scientists call this the <b>loss</b>.</p>
+<p>Here's how the score is calculated:</p>
+<ol>
+  <li>For each example, find the <b>miss</b>: the neuron's guess minus the right answer. These are the
+    little vertical bars on the chart above.</li>
+  <li><b>Square</b> each miss (multiply it by itself).</li>
+  <li>Take the <b>average</b> of all the squared misses.</li>
+</ol>
+
+<div class="card">
+  <h3 style="margin-top:0">Example: the very first guess (both knobs at 0)</h3>
+  <p>The neuron guesses 0°C for everything. For 212°F, the right answer is 100°C, so it misses by 100.
+    Squared, that's 100 × 100 = <b>10,000</b>. For 32°F, it guesses 0°C, which happens to be exactly right,
+    so the miss is 0. Do this for all 7 examples and average them, and you get a score of about
+    <b class="num-tab">1,991</b>. That's terrible! There's lots of room to improve.</p>
+</div>
+
+<div class="callout orange-edge">
+  <p><b>Why square the misses?</b> Two reasons. First, some misses are too high (positive) and some are
+    too low (negative). If we just added them up, they could cancel out and hide the mistakes. Squaring
+    makes every miss positive. Second, squaring makes big mistakes count <i>a lot</i> more than small
+    ones: a miss of 10 scores 100, but a miss of 20 scores 400. The neuron cares most about fixing its
+    worst mistakes.</p>
+</div>
+
+<!-- ===================================================================== -->
+<h2><span class="num">5</span>How the computer turns the knobs</h2>
+<p>You probably fixed the line by eye. A computer can't "see" the chart, so it needs a different
+  strategy. Here's the trick it uses.</p>
+
+<p>Imagine you're standing on a hillside in thick fog. You can't see anything, but you want to reach the
+  bottom of the valley. What do you do? <b>Feel which way the ground slopes under your feet, then take a
+  step downhill.</b> Repeat this over and over, and you'll end up at the bottom.</p>
+
+<div class="card">
+  <svg viewBox="0 0 760 270" role="img" aria-label="A valley curve. A ball takes steps down the slope toward the lowest point, which is labeled best knob setting.">
+    <!-- valley -->
+    <path d="M40,30 Q380,440 720,30" fill="none" stroke="var(--axis)" stroke-width="3"/>
+    <!-- steps: points on the curve, getting closer together near the bottom -->
+    <g fill="var(--orange)" stroke="var(--surface)" stroke-width="3">
+      <circle cx="88" cy="84" r="10"/>
+      <circle cx="168" cy="155" r="10"/>
+      <circle cx="240" cy="200" r="10"/>
+      <circle cx="300" cy="224" r="10"/>
+      <circle cx="344" cy="233" r="10"/>
+    </g>
+    <g stroke="var(--orange)" stroke-width="2" fill="none">
+      <path d="M98,78 Q137,74 160,141" marker-end="url(#arrow2)"/>
+      <path d="M178,149 Q213,145 232,186" marker-end="url(#arrow2)"/>
+      <path d="M250,194 Q279,190 292,210" marker-end="url(#arrow2)"/>
+    </g>
+    <defs>
+      <marker id="arrow2" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+        <path d="M0,0 L10,5 L0,10 z" fill="var(--orange)"/>
+      </marker>
+    </defs>
+    <!-- bottom -->
+    <circle cx="380" cy="235" r="7" fill="var(--text)"/>
+    <text x="380" y="262" text-anchor="middle" font-size="15" fill="var(--text)" font-weight="600">best knob setting (lowest score)</text>
+    <text x="70" y="62" text-anchor="start" font-size="15" fill="var(--text-secondary)">start: knobs at 0</text>
+    <text x="40" y="20" font-size="14" fill="var(--muted)">↑ mistake score</text>
+    <text x="720" y="262" text-anchor="end" font-size="14" fill="var(--muted)">knob setting →</text>
+  </svg>
+  <p style="font-size:15px;color:var(--text-secondary);margin:6px 0 0">The steps get smaller near the
+    bottom because the ground gets flatter there, so the neuron slows down as it gets close.</p>
+</div>
+
+<p>For our neuron, the "hillside" is the mistake score. Every possible knob setting has a score, and the
+  computer wants the setting with the lowest one. For each knob, it asks: <b>"If I turned this knob up a tiny
+  bit, would the score go up or down?"</b> That direction is called the <b>gradient</b> (another word for
+  slope). Then it turns each knob a small amount in the direction that makes the score go <i>down</i>.</p>
+
+<p>Each check-and-adjust is one round of learning, called an <b>epoch</b>. Here are the four steps in
+  every round:</p>
+
+<div class="steps">
+  <div class="step"><div class="n">1</div><b>Guess</b><span>Run all 7 temperatures through the neuron.</span></div>
+  <div class="step"><div class="n">2</div><b>Score</b><span>Work out the mistake score.</span></div>
+  <div class="step"><div class="n">3</div><b>Find downhill</b><span>Work out which way each knob should turn.</span></div>
+  <div class="step"><div class="n">4</div><b>Turn the knobs</b><span>Move each one a small step that way.</span></div>
+</div>
+
+<p>Then repeat, again and again. This method is called <b>gradient descent</b>: "descent" means going
+  down, and "gradient" means the slope.</p>
+
+<h3>How big should each step be?</h3>
+<p>The size of each step is called the <b>learning rate</b>, and choosing it matters:</p>
+<ul>
+  <li><b>Too small:</b> the neuron is careful but painfully slow. It might need thousands of rounds.</li>
+  <li><b>Just right:</b> it gets to the bottom quickly.</li>
+  <li><b>Too big:</b> it jumps right over the bottom of the valley and lands higher up on the other side.
+    Then it jumps back even further, and things get worse and worse. Its guesses "blow up."</li>
+</ul>
+
+<!-- ===================================================================== -->
+<h2><span class="num">6</span>Watch the computer learn</h2>
+<p>Now let the computer do it. Pick a step size and press <b>Start learning</b>. The knobs start at 0 and
+  the computer turns them itself, using the four steps above. Watch the line swing into place and
+  the score drop. Then try the other step sizes!</p>
+
+<div class="card">
+  <div id="auto" class="playground"></div>
+</div>
+
+<!-- ===================================================================== -->
+<h2><span class="num">7</span>What did it learn?</h2>
+<p>Here's what happens with the "just right" step size:</p>
+
+<div class="card">
+  <table style="font-size:16px">
+    <thead><tr><th>After round</th><th>Multiply knob</th><th>Add knob</th><th>Mistake score</th></tr></thead>
+    <tbody>
+      <tr><td>0 (start)</td><td>0</td><td>0</td><td>1,991</td></tr>
+      <tr><td>1</td><td>0.0819</td><td>3.21</td><td>1,322</td></tr>
+      <tr><td>5</td><td>0.2655</td><td>4.41</td><td>493</td></tr>
+      <tr><td>200</td><td><b>0.5556</b></td><td><b>−17.78</b></td><td><b>0.000002</b></td></tr>
+    </tbody>
+  </table>
+</div>
+
+<p>So after 200 rounds, the neuron's rule is:</p>
+<div class="equation">guess = 0.5556 × F − 17.78</div>
+<p>Now compare that to the real formula. With a little algebra, you can rewrite it the same way:</p>
+<div class="equation">C = (F − 32) × 5⁄9 &nbsp;=&nbsp; 5⁄9 × F − 32 × 5⁄9 &nbsp;=&nbsp; 0.5556 × F − 17.78</div>
+
+<div class="callout">
+  <p><b>It's the same formula!</b> The neuron discovered that you multiply by 5/9 (0.5556) and subtract
+    17.78. Nobody told it. It found them just by shrinking its mistakes, one small step at a time.</p>
+</div>
+
+<h3>Did it really learn, or just memorize?</h3>
+<p>A good test is to try temperatures the neuron <i>never saw</i> during training. If it only memorized
+  the 7 examples, it would get these wrong.</p>
+<div class="card" style="max-width:520px">
+  <table style="font-size:16px">
+    <thead><tr><th>Temperature</th><th>Neuron says</th><th>Real answer</th></tr></thead>
+    <tbody>
+      <tr><td>98.6°F (body temp)</td><td>37.00°C</td><td>37.00°C</td></tr>
+      <tr><td>350°F (baking)</td><td>176.67°C</td><td>176.67°C</td></tr>
+      <tr><td>−10°F (frigid)</td><td>−23.33°C</td><td>−23.33°C</td></tr>
+      <tr><td>451°F (paper burns)</td><td>232.78°C</td><td>232.78°C</td></tr>
+    </tbody>
+  </table>
+</div>
+<p>All correct. It learned the <b>rule</b>, not just the examples. That's the whole point of machine
+  learning: get good at examples you haven't seen before.</p>
+
+<!-- ===================================================================== -->
+<h2><span class="num">8</span>One small trick: shrinking the numbers</h2>
+<p>If you read the actual program, you'll notice one extra step: before the temperature goes into the
+  neuron, it's <b>divided by 100</b>. So 212°F goes in as 2.12.</p>
+<p>Why? When the computer works out which way to turn the multiply knob, the answer gets multiplied by the
+  input temperature. A big input like 212 makes the computer turn that knob way too hard, and the learning
+  blows up. Shrinking the inputs to small numbers keeps both knobs moving at a sensible pace. This is called
+  <b>normalization</b>, and nearly every real neural network does it. (The knob values in this page
+  are converted back to normal degrees so they're easier to read.)</p>
+
+<!-- ===================================================================== -->
+<h2><span class="num">9</span>From one neuron to AI chatbots</h2>
+<p>Our network has <b>2 knobs</b>. The neural networks that recognize faces, translate languages or power
+  AI chatbots work the same basic way, just much bigger:</p>
+<ul>
+  <li>Instead of 1 neuron, they have millions, connected in <b>layers</b> where the outputs of one layer
+    feed into the next.</li>
+  <li>Instead of 2 knobs, they can have <b>billions</b>.</li>
+  <li>Instead of 7 examples, they learn from millions or billions of them.</li>
+  <li>Each neuron also adds a small twist (called an <b>activation function</b>) so the network can learn
+    curvy, complicated patterns, not just straight lines.</li>
+</ul>
+<p>But the learning loop is the same one you just watched: <b>guess, score the mistakes, find downhill,
+  turn the knobs a little, repeat.</b> If you understand our tiny neuron, you understand the core idea.</p>
+
+<!-- ===================================================================== -->
+<h2><span class="num">10</span>Words to know</h2>
+<dl class="glossary">
+  <div><dt>Neuron</dt><dd>A tiny machine that takes numbers in, multiplies and adds, and puts a number out.</dd></div>
+  <div><dt>Neural network</dt><dd>One or more neurons that learn from examples. Ours has just one.</dd></div>
+  <div><dt>Weight <small>(w, multiply knob)</small></dt><dd>How much the input gets multiplied by.</dd></div>
+  <div><dt>Bias <small>(b, add knob)</small></dt><dd>A number added to every guess, which slides the line up or down.</dd></div>
+  <div><dt>Training data</dt><dd>The examples with known right answers that the network learns from.</dd></div>
+  <div><dt>Loss <small>(mistake score)</small></dt><dd>One number that says how wrong the guesses are. Lower is better.</dd></div>
+  <div><dt>Gradient <small>(slope)</small></dt><dd>Which way, and how strongly, turning a knob changes the score.</dd></div>
+  <div><dt>Gradient descent</dt><dd>Learning by taking small steps downhill on the mistake score.</dd></div>
+  <div><dt>Learning rate <small>(step size)</small></dt><dd>How big each knob adjustment is.</dd></div>
+  <div><dt>Epoch <small>(round)</small></dt><dd>One pass through all the examples, followed by one adjustment.</dd></div>
+  <div><dt>Normalization</dt><dd>Shrinking the input numbers so learning stays steady.</dd></div>
+  <div><dt>Test data</dt><dd>New examples the network never trained on, used to check that it really learned.</dd></div>
+</dl>
+
+<footer>
+  <p><b>Try the real program.</b> This page explains the FtoCNeuralNet project. In a terminal, run
+    <code>python3 ftoc_neural_net.py</code> to watch the neuron learn step by step, or
+    <code>python3 web_ui.py</code> for charts in your browser. The learning code is in
+    <code>neuron.py</code>, with comments explaining every line.</p>
+</footer>
+</main>
+
+<script>
+"use strict";
+
+// The 7 training examples: [Fahrenheit, Celsius].
+const DATA = [[-40, -40], [0, -17.78], [32, 0], [50, 10], [72, 22.22], [100, 37.78], [212, 100]];
+
+// The neuron, in friendly units: multiply knob is "°C per °F".
+const guess = (m, a, f) => m * f + a;
+
+// Mistake score (loss): the average of the squared misses.
+function score(m, a) {
+  let total = 0;
+  for (const [f, c] of DATA) total += (guess(m, a, f) - c) ** 2;
+  return total / DATA.length;
+}
+
+// One round of gradient descent, done exactly like neuron.py:
+// the neuron sees x = F / 100, so its weight is 100 times our multiply knob.
+function learnOneRound(m, a, stepSize) {
+  let w = m * 100, gw = 0, gb = 0;
+  for (const [f, c] of DATA) {
+    const x = f / 100;
+    const miss = w * x + a - c;
+    gw += 2 * miss * x;
+    gb += 2 * miss;
+  }
+  w -= stepSize * gw / DATA.length;
+  a -= stepSize * gb / DATA.length;
+  return [w / 100, a];
+}
+
+function fmt(v, digits) {
+  if (!Number.isFinite(v) || Math.abs(v) >= 1e6) return v > 0 ? "huge!" : "−huge!";
+  return v.toLocaleString(undefined, { minimumFractionDigits: digits, maximumFractionDigits: digits })
+          .replace("-", "−");
+}
+
+// ---------------------------------------------------------------------------
+// A playground: chart + knobs + score + table. Used twice on the page.
+// ---------------------------------------------------------------------------
+const SVG_NS = "http://www.w3.org/2000/svg";
+function el(tag, attrs, parent) {
+  const n = document.createElementNS(SVG_NS, tag);
+  for (const k in attrs) n.setAttribute(k, attrs[k]);
+  parent.appendChild(n);
+  return n;
+}
+
+function makePlayground(root, auto) {
+  const W = 460, H = 360, M = { l: 48, r: 10, t: 10, b: 40 };
+  const X0 = -50, X1 = 220, Y0 = -60, Y1 = 120;
+  const x = (f) => M.l + (f - X0) / (X1 - X0) * (W - M.l - M.r);
+  const y = (c) => H - M.b - (c - Y0) / (Y1 - Y0) * (H - M.t - M.b);
+  const clampY = (v) => Math.max(-2000, Math.min(2000, v));
+
+  root.innerHTML = `
+    <div>
+      <div class="chart-legend">
+        <span><i class="dot" style="background:var(--orange)"></i>right answer</span>
+        <span><i class="ln" style="background:var(--blue)"></i>neuron's guess</span>
+        <span><i class="bar" style="background:var(--orange)"></i>miss</span>
+      </div>
+      <svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Chart of the training examples and the neuron's guess line"></svg>
+    </div>
+    <div>
+      ${auto ? `
+        <div style="font-size:15px;color:var(--text-secondary)">Step size (learning rate):</div>
+        <div class="choices">
+          <button data-rate="0.01">Too small</button>
+          <button data-rate="0.1" aria-pressed="true">Just right</button>
+          <button data-rate="0.8">Too big</button>
+        </div>
+        <button class="go">Start learning</button>
+        <div class="message" style="margin-top:10px"></div>` : ""}
+      <div class="knob"><label>Multiply knob (weight) <b class="m-val"></b></label>
+        <input class="m" type="range" min="0" max="1" step="any" value="0" ${auto ? "disabled" : ""}></div>
+      <div class="knob"><label>Add knob (bias) <b class="a-val"></b></label>
+        <input class="a" type="range" min="-40" max="40" step="any" value="0" ${auto ? "disabled" : ""}></div>
+      <div class="score">
+        <div class="label">${auto ? "Round <span class=round>0</span> · " : ""}Mistake score (loss)</div>
+        <div class="value"></div>
+        <div class="hint"></div>
+      </div>
+      ${auto ? "" : `<table><thead><tr><th>°F</th><th>Right</th><th>Guess</th><th>Miss</th></tr></thead><tbody></tbody></table>`}
+    </div>`;
+
+  const svg = root.querySelector("svg");
+  // Gridlines and labels.
+  for (let c = -40; c <= 120; c += 40) {
+    el("line", { x1: M.l, x2: W - M.r, y1: y(c), y2: y(c), stroke: "var(--grid)" }, svg);
+    el("text", { x: M.l - 8, y: y(c) + 4, "text-anchor": "end", "font-size": 12, fill: "var(--muted)" }, svg).textContent = c + "°C";
+  }
+  for (let f = -50; f <= 200; f += 50) {
+    el("line", { x1: x(f), x2: x(f), y1: M.t, y2: H - M.b, stroke: "var(--grid)" }, svg);
+    el("text", { x: x(f), y: H - M.b + 18, "text-anchor": "middle", "font-size": 12, fill: "var(--muted)" }, svg).textContent = f + "°F";
+  }
+  const clip = el("clipPath", { id: root.id + "-clip" }, el("defs", {}, svg));
+  el("rect", { x: M.l, y: M.t, width: W - M.l - M.r, height: H - M.t - M.b }, clip);
+  const g = el("g", { "clip-path": `url(#${root.id}-clip)` }, svg);
+  const misses = DATA.map(() => el("line", { stroke: "var(--orange)", "stroke-opacity": 0.6, "stroke-width": 2 }, g));
+  const line = el("line", { stroke: "var(--blue)", "stroke-width": 2.5, "stroke-linecap": "round" }, g);
+  DATA.forEach(([f, c]) => el("circle", { cx: x(f), cy: y(c), r: 6, fill: "var(--orange)", stroke: "var(--surface)", "stroke-width": 2 }, g));
+
+  const mIn = root.querySelector(".m"), aIn = root.querySelector(".a");
+  const tbody = root.querySelector("tbody");
+
+  function draw(m, a) {
+    line.setAttribute("x1", x(X0)); line.setAttribute("y1", clampY(y(guess(m, a, X0))));
+    line.setAttribute("x2", x(X1)); line.setAttribute("y2", clampY(y(guess(m, a, X1))));
+    DATA.forEach(([f, c], i) => {
+      misses[i].setAttribute("x1", x(f)); misses[i].setAttribute("x2", x(f));
+      misses[i].setAttribute("y1", y(c)); misses[i].setAttribute("y2", clampY(y(guess(m, a, f))));
+    });
+    root.querySelector(".m-val").textContent = fmt(m, 4);
+    root.querySelector(".a-val").textContent = fmt(a, 2);
+    mIn.value = m; aIn.value = a;
+
+    const s = score(m, a);
+    root.querySelector(".score .value").textContent = fmt(s, s < 10 ? 3 : 0);
+    root.querySelector(".score .hint").textContent =
+      s < 0.01 ? "Basically perfect!" :
+      s < 5 ? "Really close!" :
+      s < 100 ? "Getting there." :
+      s < 2000 ? "Still pretty wrong." : "Way off!";
+
+    if (tbody) {
+      tbody.innerHTML = DATA.map(([f, c]) => {
+        const gss = guess(m, a, f);
+        return `<tr><td>${f}°</td><td>${fmt(c, 1)}</td><td>${fmt(gss, 1)}</td><td>${fmt(gss - c, 1)}</td></tr>`;
+      }).join("");
+    }
+  }
+
+  if (!auto) {
+    const onInput = () => draw(+mIn.value, +aIn.value);
+    mIn.addEventListener("input", onInput);
+    aIn.addEventListener("input", onInput);
+    draw(0, 0);
+    return;
+  }
+
+  // Automatic learning: run gradient descent and animate it.
+  let rate = 0.1, timer = null;
+  const msg = root.querySelector(".message");
+  const roundEl = root.querySelector(".round");
+  const goBtn = root.querySelector(".go");
+  root.querySelectorAll("[data-rate]").forEach((b) => {
+    b.onclick = () => {
+      root.querySelectorAll("[data-rate]").forEach((o) => o.setAttribute("aria-pressed", "false"));
+      b.setAttribute("aria-pressed", "true");
+      rate = +b.dataset.rate;
+      start();
+    };
+  });
+  goBtn.onclick = start;
+
+  function start() {
+    clearInterval(timer);
+    let m = 0, a = 0, round = 0;
+    const maxRounds = 200;
+    msg.className = "message";
+    msg.textContent = "Learning…";
+    goBtn.textContent = "Start over";
+    draw(m, a); roundEl.textContent = 0;
+    timer = setInterval(() => {
+      // Early rounds are shown one at a time; later ones go faster.
+      const perTick = round < 30 ? 1 : round < 80 ? 2 : 5;
+      for (let i = 0; i < perTick && round < maxRounds; i++) {
+        [m, a] = learnOneRound(m, a, rate);
+        round++;
+      }
+      roundEl.textContent = round;
+      draw(m, a);
+      const s = score(m, a);
+      if (!Number.isFinite(s) || s > 1e7) {
+        clearInterval(timer);
+        msg.className = "message bad";
+        msg.textContent = `It blew up after ${round} rounds! Each step jumped over the valley and landed higher than before.`;
+      } else if (round >= maxRounds) {
+        clearInterval(timer);
+        if (s < 0.01) {
+          msg.className = "message good";
+          msg.textContent = "Done! Look at the knobs: multiply by 0.5556 and add −17.78. That's the real formula!";
+        } else {
+          msg.className = "message";
+          msg.textContent = "200 rounds, and it's still not there. The steps are too small, so learning is slow.";
+        }
+      }
+    }, 60);
+  }
+  draw(0, 0);
+}
+
+makePlayground(document.getElementById("manual"), false);
+makePlayground(document.getElementById("auto"), true);
+</script>
+</body>
+</html>
